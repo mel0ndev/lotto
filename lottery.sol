@@ -2,13 +2,15 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v3.0.0/contracts/math/SafeMath.sol";
+
 contract LottoGame {
-//	using SafeMath for uint256; 
+using SafeMath for uint256; 
 
 address[] public winners; 
 uint public potValue;
 
-bool public hasTickets; 
+mapping(address => bool) public hasTickets; 
 
 bool public isGameActive = false; 
 
@@ -16,7 +18,15 @@ mapping(address => uint) public ticketBalance;
 
 uint public timer; 
 
-mapping(address => uint) public payoutAmount; 
+uint public payoutAmount; 
+
+mapping(address => uint) public profits; 
+
+uint public totalToPay = potValue.mul(potPayoutPercent.div(10));
+
+uint public totalTickets; 
+
+
 
 
 
@@ -34,10 +44,8 @@ constructor() public {
 	//REPLACE THIS LINE
     //Token token = Token(0x00000...);
     
-    address buyer = msg.sender; 
-    
     //set initial game gameSettings
-    minimumBuy = 1; 
+    minimumBuy = 100; 
     tokensToAddOneSecond = 1000 * 10**9;
     maxTimeLeft = 300 seconds;
     maxWinners = 5; 
@@ -60,11 +68,16 @@ function adjustBuyInAmount(uint newBuyInAmount) external {
 
 
 function buyTicket(address buyer, uint amount) public {
+    require(isGameActive == true, "Game is not active!");
 	require(amount >= minimumBuy, "You must bet a minimum of 100,000 tokens.");
 	require(ticketBalance[buyer] <= maxTickets, "You can only hold 5 tickets per round");
 	
+    if (hasTickets[buyer] == false) {
+        hasTickets[buyer] = true; 
+    }
+    
 	ticketBalance[buyer] += 1; 
-	hasTickets = true; 
+
 	
 	
 	if (amount >= minimumBuy * 2 && amount < minimumBuy * 3) {
@@ -88,11 +101,13 @@ function buyTicket(address buyer, uint amount) public {
 	}
 	
 	if (winners.length > maxWinners) {
+	    ticketBalance[winners[0]] = 0; 
+	    hasTickets[buyer] = false; 
 	    remove(0);
 	    winners.push(buyer);
 	}
 	
-	
+
     //	token.transfer(buyer, address(this), amount);
     potValue += amount; 
 }
@@ -100,34 +115,55 @@ function buyTicket(address buyer, uint amount) public {
 function startGame() public {
     isGameActive = true; 
     timer = block.timestamp; 
+    
+    if (timer >= block.timestamp + maxTimeLeft) {
+        endGame(); 
+    }
 }
 
 function endGame() public {
-    require(maxTimeLeft >= block.timestamp);
+    require(block.timestamp >= block.timestamp + maxTimeLeft);
+    getPayoutAmount(); 
+    // sendProfits(); 
+    
     isGameActive = false; 
     timer = 0; 
+    for (uint i = 0; i <= winners.length; i++) {
+        ticketBalance[winners[i]] = 0; 
+    }
     startGame(); 
 }
 
-
-function getPayoutAmount() external view returns(uint){
+function getPayoutAmount() public returns(uint, uint, uint, uint, uint) {
   //get number of tickets held by each winner in the array 
-        uint winner1 = ticketBalance[winners[0]];
-        uint winner2 = ticketBalance[winners[1]];
-  
-        uint totalTickets = winner1 + winner2; 
+        for (uint i = 0; i < winners.length; i++) {
+           totalTickets += ticketBalance[winners[i]];
+        }
+    
+    
+        uint perTicketPrice = totalToPay / totalTickets;
         
-        uint totalToPay = potValue * (potPayoutPercent / 100);
+        //calculate the winnings based on how many tickets held by each winner 
+        uint winner1Profits = perTicketPrice * ticketBalance[winners[0]];
+        uint winner2Profits = perTicketPrice * ticketBalance[winners[1]];
+        uint winner3Profits = perTicketPrice * ticketBalance[winners[2]]; 
+        uint winner4Profits = perTicketPrice * ticketBalance[winners[3]];
+        uint winner5Profits = perTicketPrice * ticketBalance[winners[4]];
+    
         
-        uint initalPayment = totalToPay / totalTickets; 
-        return initalPayment;
-       
+        return (winner1Profits, winner2Profits, winner3Profits, winner4Profits, winner5Profits);
 }
-    
-  
-  
-  //divide pot amongst the winners by amount of tickets held
-    
+
+
+
+//uncomment this function once you put your token address in the constructor
+/*function sendProfits() public {
+    token.transfer(winners[0], winner1Profits);
+    token.transfer(winners[1], winner2Profits);
+    token.transfer(winners[2], winner3Profits);
+    token.transfer(winners[4], winner4Profits); 
+    token.transfer(winners[5], winner5Profits);
+}*/
 
 function remove(uint index) public {
     for(uint i = index; i < winners.length - 1; i++) {
