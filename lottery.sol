@@ -4,8 +4,20 @@ pragma experimental ABIEncoderV2;
 
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v3.0.0/contracts/math/SafeMath.sol";
 
-contract LottoGame {
-using SafeMath for uint256; 
+interface IBEP20 {
+    function totalSupply() external view returns (uint);
+    function balanceOf(address account) external view returns (uint);
+    function transfer(address recipient, uint amount) external returns (bool);
+    function allowance(address owner, address spender) external view returns (uint);
+    function approve(address spender, uint amount) external returns (bool);
+    function transferFrom(address sender, address recipient, uint amount) external returns (bool);
+    event Transfer(address indexed from, address indexed to, uint value);
+    event Approval(address indexed owner, address indexed spender, uint value);
+}
+
+//remove abstract keywork once token address is passed into constructor
+abstract contract LottoGame is IBEP20 {
+    using SafeMath for uint256; 
 
 address[] public winners; 
 uint public potValue;
@@ -22,7 +34,7 @@ uint public payoutAmount;
 
 mapping(address => uint) public profits; 
 
-uint public totalToPay = potValue.mul(potPayoutPercent.div(10));
+uint public totalToPay = potValue.mul(potPayoutPercent.div(100));
 
 uint public totalTickets; 
 
@@ -36,7 +48,6 @@ uint public totalTickets;
         uint256 maxTimeLeft; //maximum number of seconds the timer can be
         uint256 maxWinners; //number of players eligible for winning share of the pot
         uint256 potPayoutPercent; // what percent of the pot is paid out
-        uint256 potLeftover; // what percent of pot is left over
         uint256 maxTickets; // max amount of tickets a player can hold
         
 
@@ -45,19 +56,17 @@ constructor() public {
     //Token token = Token(0x00000...);
     
     //set initial game gameSettings
-    minimumBuy = 100; 
+    minimumBuy = 100000 * 10**9; 
     tokensToAddOneSecond = 1000 * 10**9;
     maxTimeLeft = 300 seconds;
     maxWinners = 5; 
     potPayoutPercent = 60;
-    potLeftover = 40; 
-    maxTickets = 5;
-    
+    maxTickets = 5; 
 }
 
 
-function getGameSettings() public view returns (uint, uint, uint, uint, uint, uint) {
-    return (minimumBuy, tokensToAddOneSecond, maxTimeLeft, maxWinners, potPayoutPercent, potLeftover);
+function getGameSettings() public view returns (uint, uint, uint, uint, uint) {
+    return (minimumBuy, tokensToAddOneSecond, maxTimeLeft, maxWinners, potPayoutPercent);
 }
 
 function adjustBuyInAmount(uint newBuyInAmount) external {
@@ -70,7 +79,8 @@ function adjustBuyInAmount(uint newBuyInAmount) external {
 function buyTicket(address buyer, uint amount) public {
     require(isGameActive == true, "Game is not active!");
 	require(amount >= minimumBuy, "You must bet a minimum of 100,000 tokens.");
-	require(ticketBalance[buyer] <= maxTickets, "You can only hold 5 tickets per round");
+	require(ticketBalance[buyer] <= maxTickets, "You may only purchase 5 tickets per round");
+
 	
     if (hasTickets[buyer] == false) {
         hasTickets[buyer] = true; 
@@ -78,8 +88,7 @@ function buyTicket(address buyer, uint amount) public {
     
 	ticketBalance[buyer] += 1; 
 
-	
-	
+
 	if (amount >= minimumBuy * 2 && amount < minimumBuy * 3) {
 	    ticketBalance[buyer] += 1; 
 	}
@@ -107,7 +116,8 @@ function buyTicket(address buyer, uint amount) public {
 	    winners.push(buyer);
 	}
 	
-
+    //
+    
     //	token.transfer(buyer, address(this), amount);
     potValue += amount; 
 }
@@ -122,7 +132,7 @@ function startGame() public {
 }
 
 function endGame() public {
-    require(block.timestamp >= block.timestamp + maxTimeLeft);
+    require(timer >= block.timestamp + maxTimeLeft);
     getPayoutAmount(); 
     // sendProfits(); 
     
@@ -140,7 +150,7 @@ function getPayoutAmount() public returns(uint, uint, uint, uint, uint) {
            totalTickets += ticketBalance[winners[i]];
         }
     
-    
+
         uint perTicketPrice = totalToPay / totalTickets;
         
         //calculate the winnings based on how many tickets held by each winner 
@@ -163,7 +173,11 @@ function getPayoutAmount() public returns(uint, uint, uint, uint, uint) {
     token.transfer(winners[2], winner3Profits);
     token.transfer(winners[4], winner4Profits); 
     token.transfer(winners[5], winner5Profits);
+    
+    
 }*/
+
+
 
 function remove(uint index) public {
     for(uint i = index; i < winners.length - 1; i++) {
@@ -171,16 +185,5 @@ function remove(uint index) public {
     }
     winners.pop();
 }
-
-
-function pushTestAddresses() external {
-    winners.push(0x5B38Da6a701c568545dCfcB03FcB875f56beddC4);
-    winners.push(0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2);
-    winners.push(0xCA35b7d915458EF540aDe6068dFe2F44E8fa733c);
-    winners.push(0x4B20993Bc481177ec7E8f571ceCaE8A9e22C02db);
-    winners.push(0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB);
-}
-
-
 
 }
