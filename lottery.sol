@@ -39,10 +39,6 @@ uint public totalToPay = potValue.mul(potPayoutPercent.div(100));
 uint public totalTickets; 
 
 
-
-
-
-
         uint256 minimumBuy; //minimum buy to be eligible to win share of the pot
         uint256 tokensToAddOneSecond; //number of tokens that will add one second to the timer
         uint256 maxTimeLeft; //maximum number of seconds the timer can be
@@ -54,6 +50,8 @@ uint public totalTickets;
 constructor() public {
 	//REPLACE THIS LINE
     //Token token = Token(0x00000...);
+
+    address owner = msg.sender; 
     
     //set initial game gameSettings
     minimumBuy = 100000 * 10**9; 
@@ -71,9 +69,9 @@ function getGameSettings() public view returns (uint, uint, uint, uint, uint) {
 
 function adjustBuyInAmount(uint newBuyInAmount) external {
     //add new buy in amount with 9 extra zeroes when calling this function (your token has 9 decimals)
+    require(msg.sender == owner, "Only owner");
 	minimumBuy = newBuyInAmount;
 }
-
 
 
 function buyTicket(address buyer, uint amount) public {
@@ -123,6 +121,7 @@ function buyTicket(address buyer, uint amount) public {
 }
 
 function startGame() public {
+    require(msg.sender == owner, "Only owner");
     isGameActive = true; 
     timer = block.timestamp; 
     
@@ -132,8 +131,10 @@ function startGame() public {
 }
 
 function endGame() public {
+    require(msg.sender == address(this));
     require(timer >= block.timestamp + maxTimeLeft);
     getPayoutAmount(); 
+    //uncomment when ready
     // sendProfits(); 
     
     isGameActive = false; 
