@@ -184,7 +184,7 @@ function startGame() public {
 
 function endGame() private {
     require(msg.sender == address(this));
-    require(now <= endTime, "timer is over"); 
+    require(now >= endTime, "timer is over"); 
     getPayoutAmount(); 
     dealWithLeftovers(); 
     //uncomment when ready
