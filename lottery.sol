@@ -3,20 +3,19 @@ pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v3.0.0/contracts/math/SafeMath.sol";
+import "https://github.com/pancakeswap/pancake-swap-periphery/blob/master/contracts/interfaces/IPancakeRouter02.sol";
+//import other token contract 
 
 interface IBEP20 {
-    function totalSupply() external view returns (uint);
-    function balanceOf(address account) external view returns (uint);
     function transfer(address recipient, uint amount) external returns (bool);
-    function allowance(address owner, address spender) external view returns (uint);
     function approve(address spender, uint amount) external returns (bool);
     function transferFrom(address sender, address recipient, uint amount) external returns (bool);
     event Transfer(address indexed from, address indexed to, uint value);
     event Approval(address indexed owner, address indexed spender, uint value);
 }
 
-//remove abstract keywork once token address is passed into constructor
-abstract contract LottoGame is IBEP20 {
+
+contract LottoGame /*tokenName(LSC)*/ {
     using SafeMath for uint256; 
 
 address[] public winners; 
@@ -28,15 +27,32 @@ bool public isGameActive = false;
 
 mapping(address => uint) public ticketBalance; 
 
-uint public timer; 
 
 uint public payoutAmount; 
 
 mapping(address => uint) public profits; 
 
 uint public totalToPay = potValue.mul(potPayoutPercent.div(100));
+uint public totalLeftover = potValue.mul(potLeftoverPercent.div(100)); 
 
 uint public totalTickets; 
+
+address public owner;
+
+uint amountToSendToNextRound; 
+uint amountToMarketingAddress;
+uint amountToSendToLiquidity; 
+
+uint public totalTime = 300;  
+uint public timeLeft; 
+uint public startTime; 
+uint public endTime; 
+
+address public liquidityTokenRecipient;
+
+
+IPancakeRouter02 public pancakeswapV2Router;
+address payable public routerAddress = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
 
 
         uint256 minimumBuy; //minimum buy to be eligible to win share of the pot
@@ -44,21 +60,24 @@ uint public totalTickets;
         uint256 maxTimeLeft; //maximum number of seconds the timer can be
         uint256 maxWinners; //number of players eligible for winning share of the pot
         uint256 potPayoutPercent; // what percent of the pot is paid out
+        uint256 potLeftoverPercent; // what percent is leftover 
         uint256 maxTickets; // max amount of tickets a player can hold
         
 
 constructor() public {
-	//REPLACE THIS LINE
+    //REPLACE THIS LINE
     //Token token = Token(0x00000...);
 
-    address owner = msg.sender; 
+    owner = msg.sender; 
+    liquidityTokenRecipient = address(this); 
     
     //set initial game gameSettings
-    minimumBuy = 100000 * 10**9; 
-    tokensToAddOneSecond = 1000 * 10**9;
+    minimumBuy = 100000; 
+    tokensToAddOneSecond = 1000;
     maxTimeLeft = 300 seconds;
     maxWinners = 5; 
     potPayoutPercent = 60;
+    potLeftoverPercent = 40;
     maxTickets = 5; 
 }
 
@@ -70,83 +89,123 @@ function getGameSettings() public view returns (uint, uint, uint, uint, uint) {
 function adjustBuyInAmount(uint newBuyInAmount) external {
     //add new buy in amount with 9 extra zeroes when calling this function (your token has 9 decimals)
     require(msg.sender == owner, "Only owner");
-	minimumBuy = newBuyInAmount;
+    minimumBuy = newBuyInAmount;
 }
+
+function transferOwnership(address newOwner) external {
+    require(msg.sender == owner, "Only owner.");
+    owner = newOwner; 
+}
+
+function changeLiqduidityTokenRecipient(address newRecipient) private {
+    require(msg.sender == owner, "Only owner"); 
+    liquidityTokenRecipient = newRecipient; 
+}
+
 
 
 function buyTicket(address buyer, uint amount) public {
     require(isGameActive == true, "Game is not active!");
-	require(amount >= minimumBuy, "You must bet a minimum of 100,000 tokens.");
-	require(ticketBalance[buyer] <= maxTickets, "You may only purchase 5 tickets per round");
+    require(amount >= minimumBuy, "You must bet a minimum of 100,000 tokens.");
+    require(ticketBalance[buyer] <= maxTickets, "You may only purchase 5 tickets per round");
 
-	
+    
     if (hasTickets[buyer] == false) {
         hasTickets[buyer] = true; 
     }
     
-	ticketBalance[buyer] += 1; 
+    ticketBalance[buyer] += 1; 
 
 
-	if (amount >= minimumBuy * 2 && amount < minimumBuy * 3) {
-	    ticketBalance[buyer] += 1; 
-	}
-	
-	if (amount >= minimumBuy * 3 && amount < minimumBuy * 4) {
-	    ticketBalance[buyer] += 2;
-	}
-	
-	if (amount >= minimumBuy * 4 && amount < minimumBuy * 5) {
-	    ticketBalance[buyer] += 3;
-	}
-	
-	if (amount >= minimumBuy * 5) {
-	    ticketBalance[buyer] += 4;
-	}
-	
-	if (winners.length <= maxWinners) {
-	    winners.push(buyer);
-	}
-	
-	if (winners.length > maxWinners) {
-	    ticketBalance[winners[0]] = 0; 
-	    hasTickets[buyer] = false; 
-	    remove(0);
-	    winners.push(buyer);
-	}
-	
-    //
+    if (amount >= minimumBuy * 2 && amount < minimumBuy * 3) {
+        ticketBalance[buyer] += 1; 
+    }
     
-    //	token.transfer(buyer, address(this), amount);
+    if (amount >= minimumBuy * 3 && amount < minimumBuy * 4) {
+        ticketBalance[buyer] += 2;
+    }
+    
+    if (amount >= minimumBuy * 4 && amount < minimumBuy * 5) {
+        ticketBalance[buyer] += 3;
+    }
+    
+    if (amount >= minimumBuy * 5) {
+        ticketBalance[buyer] += 4;
+    }
+    
+    
+    if (winners.length <= maxWinners && hasTickets[buyer]) {
+        winners.push(buyer);
+    }
+    
+    if (winners.length > maxWinners) {
+        ticketBalance[winners[0]] = 0; 
+        hasTickets[buyer] = false; 
+        remove(0);
+        winners.push(buyer);
+    }
+    
+        uint timeToAdd = amount.div(tokensToAddOneSecond);
+        addTime(timeToAdd);
+    
+    
+    //uncomment when token address added in constructor
+    
+    //  token.transfer(address(this), amount);
     potValue += amount; 
 }
+
+    function getTimeLeft() public {
+        timeLeft = endTime - now; 
+        
+        if (now >= endTime) {
+            endGame(); 
+        }
+        
+    }
+    
+    
+    function addTime(uint timeAmount) private {
+        if (timeAmount + endTime >= 300) {
+        endTime = now + totalTime; 
+        } else {
+            endTime += timeAmount;
+        }
+    }
 
 function startGame() public {
     require(msg.sender == owner, "Only owner");
     isGameActive = true; 
-    timer = block.timestamp; 
+    startTime = now; 
+    endTime = totalTime + startTime; 
     
-    if (timer >= block.timestamp + maxTimeLeft) {
-        endGame(); 
     }
-}
 
-function endGame() public {
+
+function endGame() private {
     require(msg.sender == address(this));
-    require(timer >= block.timestamp + maxTimeLeft);
+    require(now <= endTime, "timer is over"); 
     getPayoutAmount(); 
+    dealWithLeftovers(); 
     //uncomment when ready
     // sendProfits(); 
+    // swapAndAddLiqduidity(); 
     
     isGameActive = false; 
-    timer = 0; 
+    
     for (uint i = 0; i <= winners.length; i++) {
         ticketBalance[winners[i]] = 0; 
     }
+    
     startGame(); 
 }
 
-function getPayoutAmount() public returns(uint, uint, uint, uint, uint) {
+
+
+function getPayoutAmount() private returns(uint, uint, uint, uint, uint) {
   //get number of tickets held by each winner in the array 
+  //only run once per round or tickets will be incorrectly counted
+  //this is handled by endGame(), do not call outside of that pls and thnx
         for (uint i = 0; i < winners.length; i++) {
            totalTickets += ticketBalance[winners[i]];
         }
@@ -168,6 +227,7 @@ function getPayoutAmount() public returns(uint, uint, uint, uint, uint) {
 
 
 //uncomment this function once you put your token address in the constructor
+
 /*function sendProfits() public {
     token.transfer(winners[0], winner1Profits);
     token.transfer(winners[1], winner2Profits);
@@ -178,13 +238,61 @@ function getPayoutAmount() public returns(uint, uint, uint, uint, uint) {
     
 }*/
 
+function dealWithLeftovers() private {
+    uint nextRoundPot = 25; 
+    uint liquidityAmount = 5; 
+    uint marketingAddress = 10; 
+    
+    amountToSendToNextRound = totalLeftover.mul(nextRoundPot.div(100));
+    amountToSendToLiquidity = totalLeftover.mul(liquidityAmount.div(100));
+    amountToMarketingAddress = totalLeftover.mul(marketingAddress.div(100));
+}
+
+//Send liquidity
+function swapAndAddLiqduidity() private {
+    //sell half for bnb 
+    uint halfOfLiqduidityAmount = amountToSendToLiquidity.div(2);
+    uint remainingHalf = amountToSendToLiquidity.sub(halfOfLiqduidityAmount); 
+    
+    //first swap half for BNB
+    address[] memory path = new address[](2);
+    //  path[0] = token; //ADD TOKEN ADDRESS HERE and uncomment 
+        path[1] = pancakeswapV2Router.WETH();
+        
+        
+        //approve pancakeswap to spend tokens
+       // token.approve(address(routerAddress), uint halfOfLiqduidityAmount);
+        
+        //swap
+         pancakeswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+            halfOfLiqduidityAmount,
+            0, // accept any amount of BNB
+            path,
+            address(this), //tokens get swapped to this contract so it has BNB to add liquidity 
+            block.timestamp + 30 seconds //30 second limit for the swap
+        );
+        
+        //now we have BNB, we can add liquidity to the pool
+               pancakeswapV2Router.addLiquidityETH(
+                address(this), //token address
+                remainingHalf, //amount to send
+                0, // slippage is unavoidable // 
+                0, // slippage is unavoidable // 
+                liquidityTokenRecipient, // who to send the liqduity tokens to (this address by default but can be changed in above function)
+                block.timestamp + 30 seconds //dealine 
+            );
+}
 
 
-function remove(uint index) public {
+
+//ADD TIMER MAX TOKENS INTERACTION
+
+function remove(uint index) private {
     for(uint i = index; i < winners.length - 1; i++) {
         winners[i] = winners[i + 1];
     }
     winners.pop();
 }
+
 
 }
