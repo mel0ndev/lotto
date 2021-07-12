@@ -18,7 +18,7 @@ interface IBEP20 {
 contract LottoGame /*tokenName(LSC)*/ {
     using SafeMath for uint256; 
 
-address[] public winners; 
+address payable[]  public  winners; 
 uint public potValue;
 
 mapping(address => bool) public hasTickets; 
@@ -26,7 +26,6 @@ mapping(address => bool) public hasTickets;
 bool public isGameActive = false; 
 
 mapping(address => uint) public ticketBalance; 
-
 
 uint public payoutAmount; 
 
@@ -49,6 +48,18 @@ uint public startTime;
 uint public endTime; 
 
 address public liquidityTokenRecipient;
+
+uint winner1Profits; 
+uint winner2Profits;
+uint winner3Profits; 
+uint winner4Profits;
+uint winner5Profits;
+
+uint bnb1;
+uint bnb2; 
+uint bnb3; 
+uint bnb4; 
+uint bnb5; 
 
 
 IPancakeRouter02 public pancakeswapV2Router;
@@ -81,6 +92,10 @@ constructor() public {
     maxTickets = 5; 
 }
 
+receive() external payable {
+    //to be able to receive bnb
+}
+
 
 function getGameSettings() public view returns (uint, uint, uint, uint, uint) {
     return (minimumBuy, tokensToAddOneSecond, maxTimeLeft, maxWinners, potPayoutPercent);
@@ -104,7 +119,7 @@ function changeLiqduidityTokenRecipient(address newRecipient) private {
 
 
 
-function buyTicket(address buyer, uint amount) public {
+function buyTicket(address payable buyer, uint amount) public {
     require(isGameActive == true, "Game is not active!");
     require(amount >= minimumBuy, "You must bet a minimum of 100,000 tokens.");
     require(ticketBalance[buyer] <= maxTickets, "You may only purchase 5 tickets per round");
@@ -184,12 +199,11 @@ function startGame() public {
 
 function endGame() private {
     require(msg.sender == address(this));
-    require(now >= endTime, "timer is over"); 
+    require(now <= endTime, "timer is over"); 
     getPayoutAmount(); 
+    sendProfitsInBNB(); 
     dealWithLeftovers(); 
-    //uncomment when ready
-    // sendProfits(); 
-    // swapAndAddLiqduidity(); 
+    swapAndAddLiqduidity(); 
     
     isGameActive = false; 
     
@@ -214,29 +228,50 @@ function getPayoutAmount() private returns(uint, uint, uint, uint, uint) {
         uint perTicketPrice = totalToPay / totalTickets;
         
         //calculate the winnings based on how many tickets held by each winner 
-        uint winner1Profits = perTicketPrice * ticketBalance[winners[0]];
-        uint winner2Profits = perTicketPrice * ticketBalance[winners[1]];
-        uint winner3Profits = perTicketPrice * ticketBalance[winners[2]]; 
-        uint winner4Profits = perTicketPrice * ticketBalance[winners[3]];
-        uint winner5Profits = perTicketPrice * ticketBalance[winners[4]];
-    
+        winner1Profits = perTicketPrice * ticketBalance[winners[0]];
+        winner2Profits = perTicketPrice * ticketBalance[winners[1]];
+        winner3Profits = perTicketPrice * ticketBalance[winners[2]]; 
+        winner4Profits = perTicketPrice * ticketBalance[winners[3]];
+        winner5Profits = perTicketPrice * ticketBalance[winners[4]];
+         
+        bnb1 = swapProfitsForBNB(winner1Profits);
+        bnb2 = swapProfitsForBNB(winner2Profits);
+        bnb3 = swapProfitsForBNB(winner3Profits);
+        bnb4 = swapProfitsForBNB(winner4Profits);
+        bnb5 = swapProfitsForBNB(winner5Profits);
+        
         
         return (winner1Profits, winner2Profits, winner3Profits, winner4Profits, winner5Profits);
 }
 
+function swapProfitsForBNB(uint amount) private returns (uint) {
+        address[] memory path = new address[](2);
+        path[0] = address(this);
+        path[1] = pancakeswapV2Router.WETH();
+
+        //token.approve(address(this), address(uniswapV2Router), tokenAmount);
+        
+        // make the swap
+       pancakeswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+            amount,
+            0, // accept any amount of ETH
+            path,
+            address(this),
+            block.timestamp
+        );
+}
 
 
-//uncomment this function once you put your token address in the constructor
 
-/*function sendProfits() public {
-    token.transfer(winners[0], winner1Profits);
-    token.transfer(winners[1], winner2Profits);
-    token.transfer(winners[2], winner3Profits);
-    token.transfer(winners[4], winner4Profits); 
-    token.transfer(winners[5], winner5Profits);
-    
-    
-}*/
+//send bnb amount
+function sendProfitsInBNB() public {
+    winners[0].transfer(bnb1);
+    winners[1].transfer(bnb2);
+    winners[2].transfer(bnb3);
+    winners[3].transfer(bnb4);
+    winners[4].transfer(bnb5);
+}
+
 
 function dealWithLeftovers() private {
     uint nextRoundPot = 25; 
