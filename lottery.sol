@@ -2,30 +2,21 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v3.0.0/contracts/math/SafeMath.sol";
-import "https://github.com/pancakeswap/pancake-swap-periphery/blob/master/contracts/interfaces/IPancakeRouter02.sol";
-//import other token contract 
 
-interface IBEP20 {
-    function transfer(address recipient, uint amount) external returns (bool);
-    function approve(address spender, uint amount) external returns (bool);
-    function transferFrom(address sender, address recipient, uint amount) external returns (bool);
-    event Transfer(address indexed from, address indexed to, uint value);
-    event Approval(address indexed owner, address indexed spender, uint value);
-}
+import "https://github.com/Scott6768/LOTTOSC1/blob/main/LOTTOSC1.sol";
 
 
-contract LottoGame /*tokenName(LSC)*/ {
+
+contract LottoGame {
     using SafeMath for uint256; 
 
 address payable[]  public  winners; 
 uint public potValue;
 
 mapping(address => bool) public hasTickets; 
+mapping(address => uint) public ticketBalance; 
 
 bool public isGameActive = false; 
-
-mapping(address => uint) public ticketBalance; 
 
 uint public payoutAmount; 
 
@@ -61,6 +52,8 @@ uint bnb3;
 uint bnb4; 
 uint bnb5; 
 
+LSC public token;
+
 
 IPancakeRouter02 public pancakeswapV2Router;
 address payable public routerAddress = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
@@ -76,8 +69,8 @@ address payable public routerAddress = 0xD99D1c33F9fC3444f8101754aBC46c52416550D
         
 
 constructor() public {
-    //REPLACE THIS LINE
-    //Token token = Token(0x00000...);
+    //replace LSC token address
+    token = LSC(0x5B38Da6a701c568545dCfcB03FcB875f56beddC4);
 
     owner = msg.sender; 
     liquidityTokenRecipient = address(this); 
@@ -93,7 +86,7 @@ constructor() public {
 }
 
 receive() external payable {
-    //to be able to receive bnb
+    //to be able to receive eth/bnb
 }
 
 
@@ -249,7 +242,7 @@ function swapProfitsForBNB(uint amount) private returns (uint) {
         path[0] = address(this);
         path[1] = pancakeswapV2Router.WETH();
 
-        //token.approve(address(this), address(uniswapV2Router), tokenAmount);
+        token.approve(address(pancakeswapV2Router), amount);
         
         // make the swap
        pancakeswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
@@ -264,7 +257,7 @@ function swapProfitsForBNB(uint amount) private returns (uint) {
 
 
 //send bnb amount
-function sendProfitsInBNB() public {
+function sendProfitsInBNB() private {
     winners[0].transfer(bnb1);
     winners[1].transfer(bnb2);
     winners[2].transfer(bnb3);
@@ -291,12 +284,12 @@ function swapAndAddLiqduidity() private {
     
     //first swap half for BNB
     address[] memory path = new address[](2);
-    //  path[0] = token; //ADD TOKEN ADDRESS HERE and uncomment 
+        //path[0] = ; //ADD TOKEN ADDRESS HERE and uncomment 
         path[1] = pancakeswapV2Router.WETH();
         
         
         //approve pancakeswap to spend tokens
-       // token.approve(address(routerAddress), uint halfOfLiqduidityAmount);
+       token.approve(address(pancakeswapV2Router), halfOfLiqduidityAmount);
         
         //swap
          pancakeswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
@@ -319,15 +312,11 @@ function swapAndAddLiqduidity() private {
 }
 
 
-
-//ADD TIMER MAX TOKENS INTERACTION
-
 function remove(uint index) private {
     for(uint i = index; i < winners.length - 1; i++) {
         winners[i] = winners[i + 1];
     }
     winners.pop();
 }
-
 
 }
