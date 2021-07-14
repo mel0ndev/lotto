@@ -56,6 +56,7 @@ LSC public token;
 
 
 IPancakeRouter02 public pancakeswapV2Router;
+address public constant routerAddress = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;  
 
 
         uint256 minimumBuy; //minimum buy to be eligible to win share of the pot
@@ -69,7 +70,7 @@ IPancakeRouter02 public pancakeswapV2Router;
 
 constructor() public {
     //replace LSC token address
-    token = LSC(0x000000000....);
+ //   token = LSC(0x000000000....);
 
     owner = msg.sender; 
     liquidityTokenRecipient = address(this); 
@@ -238,10 +239,10 @@ function getPayoutAmount() private returns(uint, uint, uint, uint, uint) {
 
 function swapProfitsForBNB(uint amount) private returns (uint) {
         address[] memory path = new address[](2);
-        path[0] = address(this);
+      //  path[0] = address(this); // TOKEN ADDRESS
         path[1] = pancakeswapV2Router.WETH();
 
-        token.approve(address(pancakeswapV2Router), amount);
+        token.approve(address(routerAddress), amount);
         
         // make the swap
        pancakeswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
@@ -288,7 +289,7 @@ function swapAndAddLiqduidity() private {
         
         
         //approve pancakeswap to spend tokens
-       token.approve(address(pancakeswapV2Router), halfOfLiqduidityAmount);
+       token.approve(address(routerAddress), halfOfLiqduidityAmount);
         
         //swap
          pancakeswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
@@ -301,7 +302,7 @@ function swapAndAddLiqduidity() private {
         
         //now we have BNB, we can add liquidity to the pool
                pancakeswapV2Router.addLiquidityETH(
-                address(this), //token address
+                address(this), //token address HERE
                 remainingHalf, //amount to send
                 0, // slippage is unavoidable // 
                 0, // slippage is unavoidable // 
