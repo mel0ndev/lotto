@@ -56,7 +56,6 @@ LSC public token;
 
 
 IPancakeRouter02 public pancakeswapV2Router;
-address payable public routerAddress = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
 
 
         uint256 minimumBuy; //minimum buy to be eligible to win share of the pot
@@ -70,7 +69,7 @@ address payable public routerAddress = 0xD99D1c33F9fC3444f8101754aBC46c52416550D
 
 constructor() public {
     //replace LSC token address
-    token = LSC(0x5B38Da6a701c568545dCfcB03FcB875f56beddC4);
+    token = LSC(0x000000000....);
 
     owner = msg.sender; 
     liquidityTokenRecipient = address(this); 
